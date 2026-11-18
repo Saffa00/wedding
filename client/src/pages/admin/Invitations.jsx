@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, Mail, MessageCircle, MessageSquare, Search, Share2 } from "lucide-react";
+import { Check, Copy, Download, ExternalLink, Mail, MessageCircle, MessageSquare, Search, Share2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { useLive } from "../usher/Home";
 import Sheet from "../../components/Sheet";
@@ -17,14 +17,16 @@ function InvitationSheet({ guest, onClose, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [emailIt, setEmailIt] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedMsg, setCopiedMsg] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const status = statusOf(guest);
 
   const generate = async () => {
     setBusy(true); setError("");
     try {
-      setResult(await api(`/api/invitations/${guest.id}/issue`, { method: "POST", body: { sendEmail: emailIt && !!guest.email } }));
+      const data = await api(`/api/invitations/${guest.id}/issue`, { method: "POST", body: { sendEmail: emailIt && !!guest.email } });
+      setResult(data);
       onChanged();
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   };
@@ -37,12 +39,48 @@ function InvitationSheet({ guest, onClose, onChanged }) {
     } catch (e) { setError(e.message); setConfirmCancel(false); } finally { setBusy(false); }
   };
 
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(result.link); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-    catch { setError("Could not copy. Press and hold the link to copy it."); }
+  // Compute live browser-accessible link regardless of backend APP_URL
+  const token = result?.token || (result?.link ? result.link.split("/i/").pop() : "");
+  const liveLink = token ? `${window.location.origin}/i/${token}` : (result?.link || "");
+  const shareText = result?.text
+    ? result.text.replace(/http[s]?:\/\/[^\s]+/, liveLink)
+    : `You are invited to our wedding!\n\nGuest: ${guest.name}\nYour Invitation & QR Code: ${liveLink}\n\nPlease present this digital invitation or your QR code upon arrival.`;
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(liveLink);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      setError("Could not copy. Select and copy the link text manually.");
+    }
   };
 
-  const nativeShare = () => navigator.share({ title: "Wedding invitation", text: `Invitation for ${guest.name}`, url: result.link }).catch(() => {});
+  const copyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopiedMsg(true);
+      setTimeout(() => setCopiedMsg(false), 2000);
+    } catch {
+      setError("Could not copy message.");
+    }
+  };
+
+  const nativeShare = () => {
+    if (typeof navigator.share === "function") {
+      navigator.share({ title: "Wedding invitation", text: shareText, url: liveLink }).catch(() => {});
+    }
+  };
+
+  // WhatsApp URLs:
+  const cleanPhone = (guest.phone || "").replace(/\D/g, "");
+  const hasValidIntl = cleanPhone.length >= 10 && !cleanPhone.startsWith("0");
+  const waAppUrl = hasValidIntl
+    ? `whatsapp://send?phone=${cleanPhone}&text=${encodeURIComponent(shareText)}`
+    : `whatsapp://send?text=${encodeURIComponent(shareText)}`;
+  const waWebUrl = hasValidIntl
+    ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(shareText)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
 
   if (confirmCancel) {
     return (
@@ -62,52 +100,90 @@ function InvitationSheet({ guest, onClose, onChanged }) {
 
       {result ? (
         <section className="mt-4 space-y-3" aria-label="Share invitation">
-          <p className="rounded-2xl bg-white p-4 shadow-sm">
-            <span className="block text-sm text-[#12332A]/60">Reference</span>
-            <span className="text-2xl text-[#0B4D3A]" style={serif}>{result.reference}</span>
-          </p>
-          <p role="status" className="rounded-xl bg-[#FFF4D6] px-4 py-3 text-sm text-[#6B4E00]">
-            Copy or share this link now. For security it cannot be shown again; you can only create a new link, which replaces this one.
-          </p>
-          {emailIt && guest.email && (
-            <p role="status" className={`rounded-xl px-4 py-3 text-sm ${result.emailed ? "bg-[#0B4D3A]/10 text-[#0B4D3A]" : "bg-[#FBEAEA] text-[#8A1F1F]"}`}>
-              {result.emailed ? `Email sent to ${guest.email}.` : "Email was not sent because email delivery is not set up. Use one of the share options instead."}
-            </p>
-          )}
-          <input readOnly value={result.link} aria-label="Invitation link" onFocus={(e) => e.target.select()} className={field} />
-          <button onClick={copy} className={`${btn} bg-[#0B4D3A] text-[#FBF8F1]`}><Copy size={20} />{copied ? "Copied" : "Copy link"}</button>
-          <a href={result.share.whatsapp} className={`${btn} border-2 border-[#C9A961] text-[#0B4D3A]`}><MessageCircle size={20} />Share on WhatsApp App</a>
-          {result.share.whatsappWeb && (
-            <div className="text-center">
-              <a href={result.share.whatsappWeb} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0B4D3A] underline">
-                Or share on WhatsApp Web
+          {/* Prominent QR Code Display */}
+          {result.qr && (
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-[#C9A961]/40 bg-white p-4 shadow-sm text-center">
+              <img src={result.qr} alt={`QR Code for ${guest.name}`} className="h-48 w-48 rounded-xl border border-[#0B4D3A]/10 shadow-inner" />
+              <p className="mt-2 text-sm font-semibold tracking-wider text-[#0B4D3A] uppercase">{result.reference}</p>
+              <p className="text-xs text-[#12332A]/60">Scan with usher app to check in</p>
+              <a href={result.qr} download={`invitation-${result.reference}.png`} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B4D3A] underline">
+                <Download size={14} /> Download QR Code Image
               </a>
             </div>
           )}
-          <a href={result.share.sms} className={`${btn} border-2 border-[#C9A961] text-[#0B4D3A]`}><MessageSquare size={20} />Send by SMS</a>
-          <a href={result.share.mailto} className={`${btn} border-2 border-[#C9A961] text-[#0B4D3A]`}><Mail size={20} />Send by email app</a>
-          {typeof navigator.share === "function" && <button onClick={nativeShare} className={`${btn} text-[#0B4D3A]`}><Share2 size={20} />More share options</button>}
-          <a href={result.link} target="_blank" rel="noopener noreferrer" className={`${btn} text-[#0B4D3A]`}>Open printable invitation</a>
+
+          <p role="status" className="rounded-xl bg-[#FFF4D6] px-4 py-3 text-xs text-[#6B4E00]">
+            This link and QR code are ready. Share them with {guest.name} now via WhatsApp or message.
+          </p>
+
+          {/* Invitation Link Input */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[#12332A]/70">Invitation Web Link</label>
+            <input readOnly value={liveLink} aria-label="Invitation link" onFocus={(e) => e.target.select()} className={field} />
+          </div>
+
+          {/* WhatsApp Direct Action */}
+          <a href={waAppUrl} className={`${btn} bg-[#25D366] text-white shadow-md active:bg-[#1EBE5D]`}>
+            <MessageCircle size={22} /> Share to WhatsApp App
+          </a>
+
+          {/* WhatsApp Web Fallback */}
+          <div className="text-center">
+            <a href={waWebUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0B4D3A] underline">
+              Or open in WhatsApp Web
+            </a>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={copyLink} className={`${btn} border border-[#0B4D3A]/30 bg-white text-[#0B4D3A]`}>
+              {copiedLink ? <Check size={18} className="text-[#0B4D3A]" /> : <Copy size={18} />}
+              {copiedLink ? "Link Copied" : "Copy Link"}
+            </button>
+            <button onClick={copyMessage} className={`${btn} border border-[#0B4D3A]/30 bg-white text-[#0B4D3A]`}>
+              {copiedMsg ? <Check size={18} className="text-[#0B4D3A]" /> : <Copy size={18} />}
+              {copiedMsg ? "Message Copied" : "Copy Full Text"}
+            </button>
+          </div>
+
+          {typeof navigator.share === "function" && (
+            <button onClick={nativeShare} className={`${btn} border-2 border-[#C9A961] text-[#0B4D3A]`}>
+              <Share2 size={20} /> More Share Options
+            </button>
+          )}
+
+          <a href={liveLink} target="_blank" rel="noopener noreferrer" className={`${btn} border border-[#0B4D3A]/20 bg-white text-[#0B4D3A]`}>
+            <ExternalLink size={18} /> Open Guest Invitation Page
+          </a>
         </section>
       ) : (
         <section className="mt-4 space-y-3">
           <div className="flex items-center gap-2">
             {status === "none" && <Chip>No invitation</Chip>}
-            {status === "issued" && <Chip tone="warn">Invitation issued, {guest.invitation.reference}</Chip>}
+            {status === "issued" && <Chip tone="warn">Invitation issued ({guest.invitation.reference})</Chip>}
             {status === "cancelled" && <Chip tone="bad">Invitation cancelled</Chip>}
             {guest.checkedInAt && <Chip tone="good">Checked in</Chip>}
           </div>
-          {status === "issued" && <p className="text-sm text-[#12332A]/75">Creating a new link replaces the current one. The old QR code will stop working.</p>}
+
+          {status === "issued" && (
+            <div className="rounded-2xl border border-[#C9A961]/30 bg-white p-4 shadow-sm text-sm text-[#12332A]/80">
+              <p className="font-medium text-[#0B4D3A]">Reference: {guest.invitation.reference}</p>
+              <p className="mt-1 text-xs text-[#12332A]/60">An invitation was already generated for this guest. Click below to generate a new QR link or cancel it.</p>
+            </div>
+          )}
+
           {guest.email && (
             <label className="flex min-h-[44px] items-center gap-3">
               <input type="checkbox" checked={emailIt} onChange={(e) => setEmailIt(e.target.checked)} className="h-5 w-5 accent-[#0B4D3A]" />
               <span className="text-sm">Also email it to {guest.email}</span>
             </label>
           )}
+
           {error && <p role="alert" className="rounded-xl bg-[#FBEAEA] px-4 py-3 text-sm text-[#8A1F1F]">{error}</p>}
+
           <button onClick={generate} disabled={busy} className={`${btn} bg-[#0B4D3A] text-[#FBF8F1] disabled:opacity-60`}>
-            {busy ? "Creating" : status === "none" ? "Create invitation" : status === "cancelled" ? "Create new invitation" : "Create new link"}
+            {busy ? "Generating..." : status === "none" ? "Generate Invitation & QR Code" : "Create New Link & QR Code"}
           </button>
+
           {status === "issued" && <button onClick={() => setConfirmCancel(true)} className={`${btn} text-[#8A1F1F]`}>Cancel invitation</button>}
         </section>
       )}

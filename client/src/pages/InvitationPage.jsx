@@ -25,12 +25,15 @@ export default function InvitationPage() {
     setState({ status: "loading" });
     try {
       // Public endpoint: no login and no auth header
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/public/invitation/${encodeURIComponent(token)}`, { cache: "no-store", signal });
-      if (res.status === 404) return setState({ status: "invalid" });
-      if (!res.ok) throw new Error("failed");
-      setState({ status: "ready", data: await res.json() });
+      const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+      const res = await fetch(`${baseUrl}/api/public/invitation/${encodeURIComponent(token)}`, { cache: "no-store", signal });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 404) return setState({ status: "invalid", error: json.error });
+      if (!res.ok) throw new Error(json.error || `Server returned error (${res.status})`);
+      if (!json.qr) throw new Error("QR code image is missing from server response.");
+      setState({ status: "ready", data: json });
     } catch (e) {
-      if (e.name !== "AbortError") setState({ status: "error" });
+      if (e.name !== "AbortError") setState({ status: "error", message: e.message });
     }
   }, [token]);
 
@@ -58,10 +61,10 @@ export default function InvitationPage() {
     );
   }
   if (state.status === "invalid") {
-    return <Message title="Invitation not found" body="This invitation link is not valid, or it has been replaced or cancelled. Please contact the hosts for a new one." />;
+    return <Message title="Invitation not found" body={state.error || "This invitation link is not valid, or it has been replaced or cancelled. Please contact the hosts for a new one."} />;
   }
   if (state.status === "error") {
-    return <Message title="Could not load your invitation" body="Check your internet connection and try again." onRetry={() => load()} />;
+    return <Message title="Could not load invitation" body={state.message || "Please check your internet connection and try again. If the server is starting up, please wait a moment."} onRetry={() => load()} />;
   }
 
   const d = state.data;

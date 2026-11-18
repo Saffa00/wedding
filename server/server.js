@@ -331,8 +331,16 @@ app.post("/api/invitations/:guestId/issue", admin, wrap(async (req, res) => {
   );
   if (error) throw error;
 
-  const link = `${APP_URL}/i/${token}`;
-  const text = `You are invited to the wedding of ${settings.bride_name} & ${settings.groom_name}. Your invitation: ${link}`;
+  const clientOrigin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : "") || APP_URL;
+  const baseUrl = (clientOrigin || "").replace(/\/$/, "");
+  const link = `${baseUrl}/i/${token}`;
+  const qr = await QRCode.toDataURL(token, {
+    width: 480,
+    margin: 1,
+    errorCorrectionLevel: "M",
+    color: { dark: "#0B4D3A", light: "#FFFFFF" },
+  });
+  const text = `You are invited to the wedding of ${settings.bride_name} & ${settings.groom_name}!\n\nGuest: ${guest.full_name}\nInvitation Link: ${link}\n\nPlease present this digital invitation or your QR code upon arrival.`;
   let emailed = false;
   if (req.body?.sendEmail && guest.email && resend) {
     await resend.emails.send({
@@ -343,15 +351,18 @@ app.post("/api/invitations/:guestId/issue", admin, wrap(async (req, res) => {
     emailed = true;
   }
   const cleanPhone = (guest.phone || "").replace(/\D/g, "");
+  const hasValidIntlPhone = cleanPhone.length >= 10 && !cleanPhone.startsWith("0");
   res.json({
-    reference, link, emailed,
+    reference, token, link, qr, text, emailed,
     share: {
-      whatsapp: cleanPhone
+      text,
+      whatsapp: hasValidIntlPhone
         ? `whatsapp://send?phone=${cleanPhone}&text=${encodeURIComponent(text)}`
         : `whatsapp://send?text=${encodeURIComponent(text)}`,
-      whatsappWeb: cleanPhone
-        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
-        : `https://wa.me/?text=${encodeURIComponent(text)}`,
+      whatsappGeneral: `whatsapp://send?text=${encodeURIComponent(text)}`,
+      whatsappWeb: hasValidIntlPhone
+        ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(text)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`,
       sms: `sms:${guest.phone || ""}?body=${encodeURIComponent(text)}`,
       mailto: `mailto:${guest.email || ""}?subject=${encodeURIComponent("Wedding invitation")}&body=${encodeURIComponent(text)}`,
     },
