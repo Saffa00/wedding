@@ -37,7 +37,7 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     const clean = origin.replace(/\/$/, "");
-    if (allowedOrigins.includes(clean) || clean.endsWith(".vercel.app")) {
+    if (allowedOrigins.includes(clean) || clean.endsWith(".vercel.app") || clean.endsWith(".onrender.com")) {
       return callback(null, true);
     }
     callback(new Error("Not allowed by CORS"));
@@ -505,4 +505,4 @@ app.put("/api/settings", admin, wrap(async (req, res) => {
 }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
-app.listen(PORT, () => console.log(`API listening on :${PORT}`));
+app.listen(PORT, "0.0.0.0", () => console.log(`API listening on :${PORT}`));
