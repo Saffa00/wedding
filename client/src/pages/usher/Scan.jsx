@@ -11,17 +11,29 @@ const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", 
 
 const cameraProblem = (e) => {
   const s = `${e?.name || ""} ${e?.message || e || ""}`;
-  if (/NotAllowed|Permission/i.test(s)) return "denied";
-  if (/NotFound|Overconstrained|no camera|device not found/i.test(s)) return "none";
-  if (/NotReadable|TrackStart|in use/i.test(s)) return "busy";
+  if (/NotAllowed|Permission|denied|allowed by the user agent/i.test(s)) return "denied";
+  if (/NotFound|no camera|device not found|Requested device not found/i.test(s)) return "none";
+  if (/NotReadable|TrackStart|in use|could not start video source/i.test(s)) return "busy";
   return "other";
 };
 
 const CAMERA_HELP = {
-  denied: ["Camera access is blocked", "Allow camera access for this app, then try again. On iPhone: Settings > Safari > Camera. On Android: tap the lock/settings icon in the address bar > Permissions > Camera."],
-  none: ["No camera detected", "This device has no usable camera stream. You can search by name or upload a QR image."],
-  busy: ["Camera is currently in use", "Close other browser tabs or apps that are using the camera, then try again."],
-  other: ["Camera could not start", "Ensure the website is running over HTTPS (or localhost) and your browser supports webcams."],
+  denied: [
+    "Camera Access is Blocked",
+    "Camera permission was denied. On iPhone: tap the 'aA' or lock/settings icon in the Safari address bar > Website Settings > Camera > Allow, then tap 'Try Again'.",
+  ],
+  none: [
+    "No Camera Detected",
+    "No usable camera feed was found. You can snap a photo of the QR code or search by guest name below.",
+  ],
+  busy: [
+    "Camera is In Use",
+    "Another app or browser tab is using the camera. Close other apps and tap 'Try Again'.",
+  ],
+  other: [
+    "Camera Permission Needed",
+    "Ensure your browser allows camera access. You can also take a photo or search by guest name.",
+  ],
 };
 
 function useOnline() {
@@ -137,9 +149,11 @@ export default function Scan() {
   const chain = useRef(Promise.resolve());
   const locked = useRef(false);
   const fileInputRef = useRef(null);
+  const captureInputRef = useRef(null);
 
   const [camState, setCamState] = useState("starting"); // starting | ready | error
   const [camError, setCamError] = useState("other");
+  const [camErrorMsg, setCamErrorMsg] = useState("");
   const [cameras, setCameras] = useState([]);
   const [cameraId, setCameraId] = useState(null);
   const [torchOk, setTorchOk] = useState(false);
@@ -192,19 +206,28 @@ export default function Scan() {
   const startCamera = useCallback((id) => {
     chain.current = chain.current.then(async () => {
       setCamState("starting");
+      setCamError("other");
+      setCamErrorMsg("");
       setTorchOn(false);
       setTorchOk(false);
 
       try {
-        if (!scannerRef.current) {
-          scannerRef.current = new Html5Qrcode("qr-reader", { verbose: false });
-        }
-        const s = scannerRef.current;
-        if (s.isScanning) {
+        if (scannerRef.current) {
           try {
-            await s.stop();
+            if (scannerRef.current.isScanning) {
+              await scannerRef.current.stop();
+            }
+          } catch (e) {
+            console.warn("Stop previous scanner error:", e);
+          }
+          try {
+            scannerRef.current.clear();
           } catch {}
+          scannerRef.current = null;
         }
+
+        const s = new Html5Qrcode("qr-reader", { verbose: false });
+        scannerRef.current = s;
 
         const scanConfig = {
           fps: 15,
@@ -214,19 +237,40 @@ export default function Scan() {
           },
         };
 
-        // Attempt 1: Specific camera or ideal environment (back camera)
+        // If specific id passed, use it. Otherwise query cameras to find the back camera
+        let targetCam = id;
+        if (!targetCam) {
+          try {
+            const devices = await Html5Qrcode.getCameras();
+            if (devices && devices.length > 0) {
+              setCameras(devices);
+              const rear = devices.find((d) => /back|rear|environment|world|outer/i.test(d.label)) || devices[devices.length - 1];
+              targetCam = rear?.id;
+            }
+          } catch (listErr) {
+            console.warn("getCameras upfront error:", listErr);
+          }
+        }
+
+        // html5-qrcode strictly accepts a camera id string OR { facingMode: "environment" | "user" }
         try {
-          const constraint = id ? { deviceId: { exact: id } } : { facingMode: { ideal: "environment" } };
-          await s.start(constraint, scanConfig, onDecode, () => {});
+          if (targetCam) {
+            await s.start(targetCam, scanConfig, onDecode, () => {});
+          } else {
+            await s.start({ facingMode: "environment" }, scanConfig, onDecode, () => {});
+          }
         } catch (firstErr) {
-          // Attempt 2: Fallback to any user/front camera if environment constraint was refused
-          console.warn("Back camera constraint failed, falling back to default camera:", firstErr);
-          await s.start({ facingMode: "user" }, scanConfig, onDecode, () => {});
+          console.warn("Primary camera start failed, attempting environment fallback:", firstErr);
+          try {
+            await s.start({ facingMode: "environment" }, scanConfig, onDecode, () => {});
+          } catch (secondErr) {
+            console.warn("Environment camera failed, attempting user camera:", secondErr);
+            await s.start({ facingMode: "user" }, scanConfig, onDecode, () => {});
+          }
         }
 
         setCamState("ready");
 
-        // Force playsinline and muted attributes on iOS Safari video
         setTimeout(() => {
           const vid = document.querySelector("#qr-reader video");
           if (vid) {
@@ -238,19 +282,22 @@ export default function Scan() {
         }, 150);
 
         try {
-          setCameraId(s.getRunningTrackSettings().deviceId || null);
+          setCameraId(s.getRunningTrackSettings()?.deviceId || null);
         } catch {}
         try {
-          setTorchOk(!!s.getRunningTrackCapabilities().torchFeature().isSupported());
+          setTorchOk(!!s.getRunningTrackCapabilities()?.torchFeature?.()?.isSupported?.());
         } catch {
           setTorchOk(false);
         }
 
-        const devices = await Html5Qrcode.getCameras().catch(() => []);
-        setCameras(devices);
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length > 0) setCameras(devices);
+        } catch {}
       } catch (e) {
         console.error("Camera startup error:", e);
         setCamError(cameraProblem(e));
+        setCamErrorMsg(e?.message || String(e || ""));
         setCamState("error");
       }
     });
@@ -330,15 +377,15 @@ export default function Scan() {
     setPhase("review");
   };
 
-  // Decode QR from uploaded image file
+  // Decode QR from uploaded image file or native camera photo
   const handleImageFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhase("checking");
     try {
       const helperScanner = new Html5Qrcode("qr-file-helper", { verbose: false });
-      const decodedText = await helperScanner.scanFile(file, true);
-      helperScanner.clear();
+      const decodedText = await helperScanner.scanFile(file, false);
+      try { helperScanner.clear(); } catch {}
       onDecode(decodedText);
     } catch (err) {
       console.warn("QR file scan error:", err);
@@ -346,6 +393,7 @@ export default function Scan() {
       setPhase("problem");
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (captureInputRef.current) captureInputRef.current.value = "";
     }
   };
 
@@ -503,24 +551,52 @@ export default function Scan() {
 
       {/* Camera error / blocked state */}
       {camState === "error" && (
-        <div className="absolute inset-0 z-30 grid place-items-center bg-[#FBF8F1] px-8 text-[#12332A]">
+        <div className="absolute inset-0 z-30 grid place-items-center bg-[#FBF8F1] px-6 text-[#12332A] overflow-y-auto py-8">
           <div className="max-w-sm text-center space-y-4">
             <div className="mx-auto h-16 w-16 rounded-full bg-[#FFF4D6] grid place-items-center text-[#C9A961]">
               <Camera size={32} />
             </div>
             <h1 className="text-3xl text-[#0B4D3A]" style={serif}>{CAMERA_HELP[camError][0]}</h1>
-            <p className="text-sm text-[#12332A]/75">{CAMERA_HELP[camError][1]}</p>
-            <div className="pt-2 space-y-2">
-              <button onClick={() => startCamera(null)} className={`${btn} bg-[#0B4D3A] text-[#FBF8F1] flex items-center justify-center gap-2`}>
-                <RefreshCw size={18} /> Try Again
+            <p className="text-sm text-[#12332A]/75 leading-relaxed">{CAMERA_HELP[camError][1]}</p>
+            {camErrorMsg && (
+              <p className="text-xs text-[#12332A]/40 font-mono bg-black/5 rounded-lg p-2 overflow-x-auto text-left">
+                Error: {camErrorMsg}
+              </p>
+            )}
+            <div className="pt-2 space-y-2.5">
+              <button onClick={() => startCamera(null)} className={`${btn} bg-[#0B4D3A] text-[#FBF8F1] flex items-center justify-center gap-2 shadow-md`}>
+                <RefreshCw size={18} /> Try Camera Again
               </button>
-              <label className={`${btn} border-2 border-[#C9A961] text-[#0B4D3A] flex items-center justify-center gap-2 cursor-pointer`}>
-                <Image size={18} /> Upload QR Image / Photo
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
+
+              {/* Native phone camera snap */}
+              <label className={`${btn} bg-[#C9A961] text-[#0B4D3A] font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-md`}>
+                <Camera size={18} /> Snap Photo with Camera
+                <input
+                  ref={captureInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleImageFile}
+                />
               </label>
+
+              {/* Choose image from library */}
+              <label className={`${btn} border-2 border-[#C9A961] text-[#0B4D3A] flex items-center justify-center gap-2 cursor-pointer bg-white`}>
+                <Image size={18} /> Select QR from Photos
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageFile}
+                />
+              </label>
+
               <button onClick={openLookup} className={`${btn} bg-white text-[#12332A] border border-[#12332A]/20`}>
-                Find Guest by Name
+                <Search size={18} /> Find Guest by Name
               </button>
+
               <button onClick={handleExit} className="min-h-[44px] text-sm text-[#0B4D3A]/70 underline">
                 Back to Dashboard
               </button>

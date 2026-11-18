@@ -24,6 +24,8 @@ export default defineConfig({
         start_url: "/",
         scope: "/",
         display: "standalone",
+        display_override: ["standalone", "minimal-ui", "window-controls-overlay"],
+        handle_links: "preferred",
         orientation: "portrait",
         background_color: "#FBF8F1",
         theme_color: "#0B4D3A",
