@@ -122,7 +122,7 @@ export default function Dashboard() {
         <div className="flex flex-wrap items-start justify-between gap-4 relative z-10">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-[#C9A961]">
-              <Heart size={14} /> Wedding Dashboard
+              <Heart size={14} /> Berchelle Dashboard
             </span>
             <h1 className="mt-2 text-3xl sm:text-4xl" style={serif}>
               {set ? `${set.brideName} & ${set.groomName}` : "Wedding Overview"}

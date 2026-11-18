@@ -37,7 +37,7 @@ export default function AdminLayout() {
     <div className="min-h-screen bg-[#FBF8F1] text-[#12332A]">
       {/* desktop and large tablet sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col bg-[#0B4D3A] p-5 lg:flex">
-        <p className="mb-6 text-3xl text-[#FBF8F1]" style={serif}>Wedding admin</p>
+        <p className="mb-6 text-3xl text-[#FBF8F1]" style={serif}>Berchelle admin</p>
         <nav aria-label="Administrator navigation" className="flex-1 space-y-1">
           {[...MAIN, ...MORE].map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={sideLink}><Icon size={20} />{label}</NavLink>
@@ -50,7 +50,7 @@ export default function AdminLayout() {
       <div className="lg:pl-64">
         <header className="flex items-center justify-between px-5 pb-2 lg:px-10 lg:pt-6"
                 style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}>
-          <span className="text-lg text-[#0B4D3A] lg:invisible" style={serif}>Wedding admin</span>
+          <span className="text-lg text-[#0B4D3A] lg:invisible" style={serif}>Berchelle admin</span>
           <ConnectionStatus />
         </header>
         <main className="mx-auto max-w-5xl px-5 pb-32 pt-2 lg:px-10 lg:pb-12"><InstallBanner /><Outlet /></main>

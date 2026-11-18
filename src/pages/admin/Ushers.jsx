@@ -34,7 +34,7 @@ function CredentialShareCard({ creds, onDone }) {
 
   const appUrl = window.location.origin;
   const loginUrl = `${appUrl}/login`;
-  const shareMessage = `Hello ${creds.name}! You have been added as an usher for the wedding check-in app.\n\n📲 App Login: ${loginUrl}\n📧 Email: ${creds.email}\n🔑 Temporary Password: ${creds.password}\n\nPlease sign in with these temporary credentials. The app will prompt you to set your own private password immediately upon logging in.`;
+  const shareMessage = `Hello ${creds.name}! You have been added as an usher for the Berchelle check-in app.\n\n📲 App Login: ${loginUrl}\n📧 Email: ${creds.email}\n🔑 Temporary Password: ${creds.password}\n\nPlease sign in with these temporary credentials. The app will prompt you to set your own private password immediately upon logging in.`;
 
   const cleanPhone = phone.replace(/\D/g, "");
   const waAppUrl = cleanPhone
