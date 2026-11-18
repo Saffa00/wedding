@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Wedding Check-in</title>
+    <meta name="description" content="Wedding invitations and QR guest check-in." />
+    <meta name="theme-color" content="#0B4D3A" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- iPhone: standalone mode with a light status bar that matches the ivory screens -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Wedding" />
+    <meta name="format-detection" content="telephone=no" />
+    <style>
+      /* Loading screen shown until React mounts */
+      #boot{position:fixed;inset:0;display:grid;place-items:center;background:#0B4D3A;z-index:9999}
+      #boot svg{width:112px;height:112px;animation:bootfade .6s ease-out both}
+      @keyframes bootfade{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+      @media (prefers-reduced-motion:reduce){#boot svg{animation:none}}
+    </style>
+  </head>
+  <body>
+    <div id="boot" aria-hidden="true">
+      <svg viewBox="0 0 512 512" fill="none" stroke="#C9A961" stroke-width="18">
+        <circle cx="212" cy="286" r="84" /><circle cx="300" cy="286" r="84" />
+        <path d="M256 150l22 30-22 30-22-30z" fill="#C9A961" stroke="none" />
+      </svg>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
