@@ -17,9 +17,9 @@ export default defineConfig({
       },
       manifest: {
         id: "/",
-        name: "Wedding Check-in",
-        short_name: "Wedding",
-        description: "Wedding invitations and QR guest check-in.",
+        name: "Berchelle Check-in",
+        short_name: "Berchelle",
+        description: "Berchelle invitations and QR guest check-in.",
         lang: "en",
         start_url: "/",
         scope: "/",

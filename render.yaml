@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: wedding-pwa-api
+    name: berchelle-api
     runtime: node
     plan: free
     rootDir: server
