@@ -6,6 +6,11 @@ import rateLimit from "express-rate-limit";
 import QRCode from "qrcode";
 import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
+
+if (!globalThis.WebSocket) {
+  globalThis.WebSocket = WebSocket;
+}
 
 const { PORT = 4000, APP_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, EMAIL_FROM } = process.env;
 if (!APP_URL || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || SUPABASE_URL.includes("YOUR-PROJECT")) {
