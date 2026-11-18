@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch --env-file=.env server.js",
+    "build": "echo 'No build step needed'",
     "start": "node server.js"
   },
   "engines": { "node": ">=20" },
