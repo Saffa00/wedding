@@ -509,5 +509,6 @@ app.put("/api/settings", admin, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+app.get("/", (_req, res) => res.json({ service: "Berchelle Check-in API", status: "online", health: "/health" }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.listen(PORT, "0.0.0.0", () => console.log(`API listening on :${PORT}`));
