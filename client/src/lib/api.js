@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-const BASE = import.meta.env.VITE_API_URL;
+const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(message, status, body) {
@@ -16,6 +16,9 @@ export async function api(path, { method = "GET", body } = {}) {
   if (!navigator.onLine) {
     throw new ApiError("You are offline. Connect to the internet and try again.", 0);
   }
+  if (!BASE) {
+    throw new ApiError("VITE_API_URL is not set. Please add your Render backend URL to Vercel Environment Variables.", 0);
+  }
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
@@ -30,12 +33,27 @@ export async function api(path, { method = "GET", body } = {}) {
       },
       body: body ? JSON.stringify(body) : undefined,
     });
-  } catch {
-    throw new ApiError("Cannot reach the server. Check your connection.", 0);
+  } catch (err) {
+    throw new ApiError(`Cannot reach the backend server at ${BASE}. Ensure Render is online.`, 0);
   }
 
-  const json = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let json = {};
+  try {
+    json = JSON.parse(text);
+  } catch {
+    if (text.includes("<!doctype") || text.includes("<html") || text.includes("<head")) {
+      throw new ApiError(
+        `Received HTML instead of JSON from ${BASE}${path}. Check that VITE_API_URL points to your Render backend (https://...onrender.com).`,
+        res.status
+      );
+    }
+  }
+
   // Scan endpoints return meaningful JSON on 403/404/409, so callers read err.body
-  if (!res.ok) throw new ApiError(json.error || json.result || "Request failed.", res.status, json);
+  if (!res.ok) {
+    const errorMsg = json.error || json.result || (res.status === 401 ? "Unauthorized. Please sign in again." : `Request failed (status ${res.status}).`);
+    throw new ApiError(errorMsg, res.status, json);
+  }
   return json;
 }

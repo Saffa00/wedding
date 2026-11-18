@@ -63,8 +63,8 @@ export function AuthProvider({ children }) {
       if (err.status === 403) {
         throw new Error("Signed in to Supabase, but this account is not in the 'profiles' table. Run the INSERT query in Supabase SQL editor.");
       }
-      if (err.status === 0 || /fetch|network|reach the server/i.test(err.message)) {
-        throw new Error("Signed in to Supabase, but cannot reach the backend server (port 4000). Start the server in the 'server' folder.");
+      if (err.status === 0 || /fetch|network|reach the|cannot reach/i.test(err.message)) {
+        throw new Error(err.message || "Signed in to Supabase, but cannot reach the backend API server. Check VITE_API_URL and verify Render is running.");
       }
       throw err;
     }
