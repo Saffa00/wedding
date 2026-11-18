@@ -148,10 +148,32 @@ app.post("/api/scan/check-in", staff, wrap(async (req, res) => {
   res.status(data.result === "success" ? 200 : 409).json(data);
 }));
 
-// Manual lookup: find a guest by name
+// Manual lookup: find a guest by name or invitation reference code
 app.get("/api/guests/search", staff, wrap(async (req, res) => {
   const q = String(req.query.q || "").trim().replace(/[%,()]/g, "");
   if (q.length < 2) return res.json([]);
+
+  // Check if searching by reference code (e.g. WED-...)
+  if (/^WED|^[A-Z0-9]{3,}$/i.test(q)) {
+    const { data: refData } = await db
+      .from("invitations")
+      .select("id, reference, status, guests(id, full_name, side, seating_tables(number)), check_ins(checked_in_at)")
+      .ilike("reference", `%${q}%`)
+      .limit(10);
+    if (refData && refData.length > 0) {
+      return res.json(refData.map((inv) => ({
+        guestId: inv.guests?.id,
+        name: inv.guests?.full_name,
+        side: inv.guests?.side,
+        table: one(inv.guests?.seating_tables)?.number ?? null,
+        invitationId: inv.id,
+        reference: inv.reference,
+        status: inv.status,
+        checkedInAt: one(inv.check_ins)?.checked_in_at ?? null,
+      })));
+    }
+  }
+
   const { data, error } = await db
     .from("guests")
     .select("id, full_name, side, seating_tables(number), invitations(id, reference, status), check_ins(checked_in_at)")

@@ -29,7 +29,9 @@ export default function AdminLayout() {
   const logout = async () => { await signOut(); navigate("/login", { replace: true }); };
 
   const mobileTab = ({ isActive }) =>
-    `flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-xs ${isActive ? "text-[#0B4D3A] font-semibold" : "text-[#12332A]/60"}`;
+    `flex flex-1 flex-col items-center justify-center h-full py-1 text-xs transition-colors ${
+      isActive ? "text-[#0B4D3A] font-semibold" : "text-[#12332A]/60 hover:text-[#0B4D3A]"
+    }`;
   const sideLink = ({ isActive }) =>
     `flex items-center gap-3 rounded-xl px-4 min-h-[44px] ${isActive ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10"}`;
 
@@ -57,16 +59,29 @@ export default function AdminLayout() {
       </div>
 
       {/* phone bottom navigation */}
-      <nav aria-label="Administrator navigation"
-           className="fixed inset-x-0 bottom-0 z-10 flex border-t border-[#0B4D3A]/10 bg-white/95 backdrop-blur lg:hidden"
-           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        {MAIN.map(({ to, label, icon: Icon, end }) => (
-          <NavLink key={to} to={to} end={end} className={mobileTab}><Icon size={22} />{label}</NavLink>
-        ))}
-        <button onClick={() => setMoreOpen(true)} aria-haspopup="dialog"
-                className={`flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-xs ${moreActive ? "font-semibold text-[#0B4D3A]" : "text-[#12332A]/60"}`}>
-          <MoreHorizontal size={22} />More
-        </button>
+      <nav
+        aria-label="Administrator navigation"
+        className="fixed inset-x-0 bottom-0 z-10 border-t border-[#0B4D3A]/10 bg-white/95 backdrop-blur shadow-[0_-4px_25px_rgba(0,0,0,0.05)] lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <div className="flex items-center justify-between h-16 max-w-md mx-auto px-2">
+          {MAIN.map(({ to, label, icon: Icon, end }) => (
+            <NavLink key={to} to={to} end={end} className={mobileTab}>
+              <Icon size={21} className="mb-0.5" />
+              <span className="text-[11px] leading-tight">{label}</span>
+            </NavLink>
+          ))}
+          <button
+            onClick={() => setMoreOpen(true)}
+            aria-haspopup="dialog"
+            className={`flex flex-1 flex-col items-center justify-center h-full py-1 text-xs transition-colors ${
+              moreActive ? "font-semibold text-[#0B4D3A]" : "text-[#12332A]/60 hover:text-[#0B4D3A]"
+            }`}
+          >
+            <MoreHorizontal size={21} className="mb-0.5" />
+            <span className="text-[11px] leading-tight">More</span>
+          </button>
+        </div>
       </nav>
 
       {moreOpen && (

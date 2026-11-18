@@ -43,6 +43,11 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/i/:token" element={<InvitationPage />} />
 
+          {/* Both Admin and Usher can use the QR Scanner */}
+          <Route element={<ProtectedRoute roles={["admin", "usher"]} />}>
+            <Route path="/usher/scan" element={<Suspense fallback={<Splash />}><Scan /></Suspense>} />
+          </Route>
+
           <Route element={<ProtectedRoute roles={["admin"]} />}>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboard />} />
@@ -57,7 +62,6 @@ export default function App() {
           </Route>
 
           <Route element={<ProtectedRoute roles={["usher"]} />}>
-            <Route path="/usher/scan" element={<Suspense fallback={<Splash />}><Scan /></Suspense>} />
             <Route path="/usher" element={<UsherLayout />}>
               <Route index element={<UsherHome />} />
               <Route path="activity" element={<UsherActivity />} />
