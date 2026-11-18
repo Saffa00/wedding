@@ -26,7 +26,8 @@ export default function InvitationPage() {
     try {
       // Public endpoint: no login and no auth header
       const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-      const res = await fetch(`${baseUrl}/api/public/invitation/${encodeURIComponent(token)}`, { cache: "no-store", signal });
+      const cleanToken = (token || "").trim().replace(/[.,;!?)>]+$/, "");
+      const res = await fetch(`${baseUrl}/api/public/invitation/${encodeURIComponent(cleanToken)}`, { cache: "no-store", signal });
       const json = await res.json().catch(() => ({}));
       if (res.status === 404) return setState({ status: "invalid", error: json.error });
       if (!res.ok) throw new Error(json.error || `Server returned error (${res.status})`);

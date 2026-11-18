@@ -58,10 +58,31 @@ const publicLimiter = rateLimit({ windowMs: 60_000, limit: 20 });
 /* ---------- helpers ---------- */
 
 const hash = (t) => crypto.createHash("sha256").update(t).digest("hex");
-const newToken = () => crypto.randomBytes(24).toString("base64url");
+// Use hex to avoid characters like "_" that trigger italic formatting in WhatsApp and break links
+const newToken = () => crypto.randomBytes(20).toString("hex");
 const newRef = () => "WED-" + crypto.randomBytes(4).toString("hex").slice(0, 6).toUpperCase();
-// QR may hold a bare token or a full invitation link
-const readToken = (v) => (typeof v === "string" ? v.trim().split("/").pop().split("?")[0] : "");
+// Robust token parser that strips URL wrappers and any trailing punctuation
+const readToken = (v) => {
+  if (typeof v !== "string") return "";
+  let t = v.trim();
+  if (t.includes("/i/")) {
+    t = t.split("/i/").pop();
+  } else if (t.includes("/")) {
+    t = t.split("/").pop();
+  }
+  t = t.split("?")[0].split("#")[0];
+  return t.replace(/[.,;!?)>]+$/, "").trim();
+};
+// Resolves either a 40-char token or a reference code (WED-XXXXXX) to its token_hash
+const resolveTokenHash = async (token) => {
+  if (!token) return "";
+  const clean = token.trim();
+  if (/^WED-[A-Z0-9]+$/i.test(clean)) {
+    const { data } = await db.from("invitations").select("token_hash").eq("reference", clean.toUpperCase()).maybeSingle();
+    if (data?.token_hash) return data.token_hash;
+  }
+  return hash(clean);
+};
 // PostgREST returns an object for one-to-one embeds and an array for one-to-many; accept both
 const one = (v) => (Array.isArray(v) ? v[0] : v) ?? null;
 const wrap = (fn) => (req, res) => fn(req, res).catch((e) => {
@@ -109,7 +130,8 @@ app.post("/api/me/password", staff, wrap(async (req, res) => {
 app.post("/api/scan/verify", staff, wrap(async (req, res) => {
   const token = readToken(req.body?.token);
   if (!token) return res.status(400).json({ result: "invalid" });
-  const { data, error } = await db.rpc("verify_invitation", { p_token_hash: hash(token) });
+  const tokenHash = await resolveTokenHash(token);
+  const { data, error } = await db.rpc("verify_invitation", { p_token_hash: tokenHash });
   if (error) throw error;
   const row = data?.[0];
   if (!row) return res.status(404).json({ result: "invalid" });
@@ -120,7 +142,8 @@ app.post("/api/scan/verify", staff, wrap(async (req, res) => {
 app.post("/api/scan/check-in", staff, wrap(async (req, res) => {
   const token = readToken(req.body?.token);
   if (!token) return res.status(400).json({ result: "invalid" });
-  const { data, error } = await db.rpc("check_in_guest", { p_token_hash: hash(token), p_usher_id: req.user.id });
+  const tokenHash = await resolveTokenHash(token);
+  const { data, error } = await db.rpc("check_in_guest", { p_token_hash: tokenHash, p_usher_id: req.user.id });
   if (error) throw error;
   res.status(data.result === "success" ? 200 : 409).json(data);
 }));
@@ -380,15 +403,18 @@ app.post("/api/invitations/:id/revoke", admin, wrap(async (req, res) => {
 
 app.get("/api/public/invitation/:token", publicLimiter, wrap(async (req, res) => {
   const token = readToken(req.params.token);
-  const { data, error } = await db.rpc("verify_invitation", { p_token_hash: hash(token) });
+  if (!token) return res.status(400).json({ error: "Invalid invitation token." });
+  const tokenHash = await resolveTokenHash(token);
+  const { data, error } = await db.rpc("verify_invitation", { p_token_hash: tokenHash });
   if (error) throw error;
   const inv = data?.[0];
-  if (!inv || inv.status !== "active") return res.status(404).json({ error: "This invitation is not valid." });
+  if (!inv || inv.status !== "active") return res.status(404).json({ error: "This invitation link is not valid, or it has been replaced or cancelled." });
   const s = await getSettings();
   if (!s) return res.status(503).json({ error: "The wedding details have not been set up yet." });
   res.json({
     guestName: inv.guest_name, side: inv.side, table: inv.table_number, reference: inv.reference,
     brideName: s.bride_name, groomName: s.groom_name, eventDate: s.event_date, venue: s.venue, timezone: s.timezone,
+    checkedIn: inv.checked_in,
     qr: await QRCode.toDataURL(token, { width: 480, margin: 1, errorCorrectionLevel: "M",
       color: { dark: "#0B4D3A", light: "#FFFFFF" } }),
   });
